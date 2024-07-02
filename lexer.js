@@ -1,7 +1,7 @@
 // lexer.js
-import { TokenType } from './tokenTypes.js';
-import { Token } from './token.js';
-import { ParseError } from './parseError.js';
+import { TokenType } from './token/tokenTypes.js';
+import { Token } from './token/token.js';
+import { ParseError } from './parser/parseError.js';
 
 export class Lexer {
   constructor(input) {
@@ -51,7 +51,6 @@ export class Lexer {
 
   readUnquoted() {
     let value = '';
-    const startPos = this.position;
     while (this.position < this.input.length && !['{', '}', ':', ',', '"', ' ', '\n', '\t', '\r'].includes(this.input[this.position])) {
       value += this.input[this.position];
       this.position++;

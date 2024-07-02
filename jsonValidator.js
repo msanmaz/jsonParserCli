@@ -1,7 +1,7 @@
 // jsonValidator.js
 import { Lexer } from './lexer.js';
-import { Parser } from './parser.js';
-import { ParseError } from './parseError.js';
+import { Parser } from './parser/parser.js';
+import { ParseError } from './parser/parseError.js';
 
 export function isValidJSON(jsonString) {
   try {

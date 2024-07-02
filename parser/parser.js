@@ -1,5 +1,5 @@
 // parser.js
-import { TokenType } from './tokenTypes.js';
+import { TokenType } from '../token/tokenTypes.js';
 import { ParserState } from './parserState.js';
 import { ParseError } from './parseError.js';
 
