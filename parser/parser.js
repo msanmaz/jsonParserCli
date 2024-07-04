@@ -34,8 +34,7 @@ export class Parser {
           state = this.handleCommaState();
           break;
         case ParserState.END:
-          console.log('Reached END state unexpectedly');
-          throw new ParseError(`Unexpected token after end of JSON object: '${this.currentToken.value}'`, this.lexer.position);
+          return true; // Successfully parsed
       }
       
       if (state !== ParserState.END) {
@@ -44,12 +43,7 @@ export class Parser {
     }
 
     console.log(`Parsing complete. Final state: ${state}, Depth: ${this.depth}`);
-    if (state !== ParserState.END || this.depth !== 0) {
-      console.log('Error: Unexpected end of input');
-      throw new ParseError(`Unexpected end of input`, this.lexer.position);
-    }
-
-    return true;
+    return state === ParserState.END && this.depth === 0;
   }
 
   handleStartState() {
@@ -59,7 +53,6 @@ export class Parser {
       console.log(`Found opening brace. Depth is now ${this.depth}`);
       return ParserState.KEY;
     } else {
-      console.log(`Error: Expected '{' but found ${this.currentToken.value}`);
       throw new ParseError(`Expected '{' at the start of the JSON object`, this.lexer.position);
     }
   }
@@ -70,20 +63,13 @@ export class Parser {
       console.log(`Found key: ${this.currentToken.value}`);
       return ParserState.COLON;
     } else if (this.currentToken.type === TokenType.RIGHT_BRACE) {
+      if (this.depth === 1 && this.lexer.position > 2) { // Check for trailing comma
+        throw new ParseError('Trailing comma is not allowed', this.lexer.position - 1);
+      }
       this.depth--;
       console.log(`Found closing brace. Depth is now ${this.depth}`);
-      if (this.depth === 0) {
-        console.log('Closing the outermost object');
-        return ParserState.END;
-      } else {
-        console.log('Closing an inner object');
-        return ParserState.COMMA;
-      }
-    } else if (this.currentToken.type === TokenType.UNQUOTED) {
-      console.log(`Error: Found unquoted key ${this.currentToken.value}`);
-      throw new ParseError(`Unquoted key '${this.currentToken.value}' is not allowed`, this.lexer.position - this.currentToken.value.length);
+      return this.depth === 0 ? ParserState.END : ParserState.COMMA;
     } else {
-      console.log(`Error: Expected string key or '}' but found ${this.currentToken.value}`);
       throw new ParseError(`Expected string key or '}', found '${this.currentToken.value}'`, this.lexer.position);
     }
   }
@@ -94,19 +80,23 @@ export class Parser {
       console.log('Found colon');
       return ParserState.VALUE;
     } else {
-      console.log(`Error: Expected ':' but found ${this.currentToken.value}`);
       throw new ParseError(`Expected ':' after key, found '${this.currentToken.value}'`, this.lexer.position);
     }
   }
 
   handleValueState() {
     console.log('Handling VALUE state');
-    if (this.currentToken.type === TokenType.STRING) {
+    if ([TokenType.STRING, TokenType.NUMBER, TokenType.BOOLEAN, TokenType.NULL].includes(this.currentToken.type)) {
       console.log(`Found value: ${this.currentToken.value}`);
       return ParserState.COMMA;
+    } else if (this.currentToken.type === TokenType.LEFT_BRACE) {
+      this.parseNestedObject();
+      return ParserState.COMMA;
+    } else if (this.currentToken.type === TokenType.LEFT_BRACKET) {
+      this.parseArray();
+      return ParserState.COMMA;
     } else {
-      console.log(`Error: Expected string value but found ${this.currentToken.value}`);
-      throw new ParseError(`Expected string value, found '${this.currentToken.value}'`, this.lexer.position);
+      throw new ParseError(`Expected value, found '${this.currentToken.value}'`, this.lexer.position);
     }
   }
 
@@ -114,21 +104,81 @@ export class Parser {
     console.log('Handling COMMA state');
     if (this.currentToken.type === TokenType.COMMA) {
       console.log('Found comma');
-      const nextToken = this.lexer.nextToken();
-      console.log(`Next token after comma: ${JSON.stringify(nextToken)}`);
-      if (nextToken.type === TokenType.RIGHT_BRACE) {
-        console.log('Error: Found trailing comma');
-        throw new ParseError(`Trailing comma is not allowed`, this.lexer.position);
-      }
-      this.currentToken = nextToken;
       return ParserState.KEY;
     } else if (this.currentToken.type === TokenType.RIGHT_BRACE) {
       this.depth--;
       console.log(`Found closing brace. Depth is now ${this.depth}`);
       return this.depth === 0 ? ParserState.END : ParserState.COMMA;
     } else {
-      console.log(`Error: Expected ',' or '}' but found ${this.currentToken.value}`);
       throw new ParseError(`Expected ',' or '}', found '${this.currentToken.value}'`, this.lexer.position);
     }
+  }
+
+  parseNestedObject() {
+    this.depth++;
+    let state = ParserState.KEY;
+    while (true) {
+      this.currentToken = this.lexer.nextToken();
+      switch (state) {
+        case ParserState.KEY:
+          if (this.currentToken.type === TokenType.RIGHT_BRACE) {
+            this.depth--;
+            return;
+          }
+          state = this.handleKeyState();
+          break;
+        case ParserState.COLON:
+          state = this.handleColonState();
+          break;
+        case ParserState.VALUE:
+          state = this.handleValueState();
+          break;
+        case ParserState.COMMA:
+          if (this.currentToken.type === TokenType.RIGHT_BRACE) {
+            this.depth--;
+            return;
+          }
+          state = this.handleCommaState();
+          if (state === ParserState.END) {
+            return;
+          }
+          break;
+      }
+    }
+  }
+
+  parseArray() {
+    console.log('Parsing array');
+    while (this.currentToken.type !== TokenType.RIGHT_BRACKET) {
+      this.currentToken = this.lexer.nextToken(); // Move to the next token
+      console.log(`Array element token: ${JSON.stringify(this.currentToken)}`);
+      
+      if ([TokenType.STRING, TokenType.NUMBER, TokenType.BOOLEAN, TokenType.NULL].includes(this.currentToken.type)) {
+        // Valid array element
+        console.log(`Found array element: ${this.currentToken.value}`);
+      } else if (this.currentToken.type === TokenType.LEFT_BRACE) {
+        this.parseNestedObject();
+      } else if (this.currentToken.type === TokenType.LEFT_BRACKET) {
+        this.parseArray();
+      } else if (this.currentToken.type === TokenType.RIGHT_BRACKET) {
+        // End of array
+        break;
+      } else {
+        throw new ParseError(`Expected array element or ']', found '${this.currentToken.value}'`, this.lexer.position);
+      }
+
+      // Check for comma or end of array
+      this.currentToken = this.lexer.nextToken();
+      if (this.currentToken.type === TokenType.COMMA) {
+        // Move to the next element
+        continue;
+      } else if (this.currentToken.type === TokenType.RIGHT_BRACKET) {
+        // End of array
+        break;
+      } else {
+        throw new ParseError(`Expected ',' or ']', found '${this.currentToken.value}'`, this.lexer.position);
+      }
+    }
+    console.log('Finished parsing array');
   }
 }
