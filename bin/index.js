@@ -1,15 +1,18 @@
-// #!/usr/bin/env node
-
 import { isValidJSON } from '../jsonValidator.js';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-export default function main() {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function main() {
   if (process.argv.length < 3) {
-    console.error('Usage: node main.js <path-to-json-file>');
+    console.error('Usage: jsonParser <path-to-json-file>');
     process.exit(1);
   }
 
-  const filePath = process.argv[2];
+  const filePath = path.resolve(process.argv[2]);
 
   try {
     const jsonString = fs.readFileSync(filePath, 'utf8');
@@ -27,3 +30,5 @@ export default function main() {
     process.exit(1);
   }
 }
+
+main();

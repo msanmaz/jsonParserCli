@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "bin":{"jsonParser":"./bin/index.js"},
+  "bin": {
+    "jsonParser": "./bin/jsonParser"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
